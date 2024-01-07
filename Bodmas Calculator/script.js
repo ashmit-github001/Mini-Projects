@@ -30,11 +30,10 @@ class Calculator {
     } else if (!this.validParanthesis(expression)) {
       throw Error("Invalid", "Invalid");
     } else {
-      return this.evaluateExpressionWithBracket(expression);
+      this.result = this.evaluateExpressionWithBracket(expression);
     }
   }
   evaluateExpressionWithBracket(expression) {
-    this.clear();
     const lastStartIndex = expression.lastIndexOf("(");
     if (lastStartIndex > -1) {
       const firstEndIndex =
@@ -56,46 +55,35 @@ class Calculator {
   evaluateSimpleExpression(expression) {
     const operators = "+-*/";
     let numIsNegative = 1;
-    let isDecimal = false;
+    let isDecimal = 1;
     const numberStack = [];
     const operatorStack = [];
 
     for (let i = 0; i < expression.length; i++) {
       if (operators.indexOf(expression[i]) > -1) {
-        if (expression[i + 1] === "-") numIsNegative = -1;
         switch (expression[i]) {
           case "+":
-            if (operatorStack.length > 1) {
+            if (operatorStack.length > 0) {
               numberStack.push(
-                this.evaluateMidOperation(
+                this.evaluateOperation(
                   operatorStack.pop(),
                   parseFloat(numberStack.pop()),
                   parseFloat(numberStack.pop())
                 )
               );
-            } else if (operatorStack.length > 0) {
-              this.evaluateLastOperation(
-                operatorStack.pop(),
-                numberStack.pop()
-              );
             }
             operatorStack.push(expression[i]);
             break;
           case "-":
-            if (i === 0) numIsNegative = -1;
+            if (i === 0) numIsNegative = -1; // If first operand is negative, skip this - operator
             if (numIsNegative === 1) {
-              if (operatorStack.length > 1) {
+              if (operatorStack.length > 0) {
                 numberStack.push(
-                  this.evaluateMidOperation(
+                  this.evaluateOperation(
                     operatorStack.pop(),
                     parseFloat(numberStack.pop()),
                     parseFloat(numberStack.pop())
                   )
-                );
-              } else if (operatorStack.length > 0) {
-                this.evaluateLastOperation(
-                  operatorStack.pop(),
-                  numberStack.pop()
                 );
               }
               operatorStack.push(expression[i]);
@@ -103,88 +91,70 @@ class Calculator {
             break;
           case "*":
           case "/":
+            // * and / needs to be addressed before + and  - so push it on  top of the stack and keep resolving it as soon as next + or - is encountered
             operatorStack.push(expression[i]);
             break;
         }
+        if (numIsNegative == 1 && expression[i + 1] === "-") numIsNegative = -1; // If upcoming operator after this operator is - so the next operand will be negative
+        isDecimal = 1;
       } else {
+        // If this is a decimal then skip it and the next digit that comes will be divided by 10
         if (expression[i] === ".") {
-          isDecimal = true;
+          isDecimal = 10;
         } else {
           const num = parseFloat(expression[i]);
-          // This is the first operand of expression so store in  result
-          if (numberStack.length === 0 && operatorStack.length === 0) {
-            if (isDecimal)
-              this.result = this.result + (num / 10) * numIsNegative;
-            else this.result = this.result * 10 + num * numIsNegative;
+          // This is the first digit of the first +ve or -ve operand in the number stack || this is the first digit of a +ve operand after an operator || this is the first digit of a -ve operand after an operator
+          if (
+            numberStack.length === 0 ||
+            (numIsNegative == 1 && operators.indexOf(expression[i - 1]) > -1) ||
+            (numIsNegative == -1 && operators.indexOf(expression[i - 2]) > -1)
+          ) {
+            numberStack.push((num * numIsNegative) / isDecimal);
           }
-          // These are the later operands
+          // These are the other digits of the operands that go into number stack
           else {
-            // This is the first digit of the operand after an operator and in  the number stack
-            if (
-              numberStack.length === 0 ||
-              operators.indexOf(expression[i - 1]) > -1
-            ) {
-              if (isDecimal) numberStack.push((num / 10) * numIsNegative);
-              else numberStack.push(num * numIsNegative);
-            }
-            // These are the other digits of the operands that go into number stack
-            else {
-              if (isDecimal) numberStack.push(numberStack.pop() + num / 10);
-              else numberStack.push(numberStack.pop() * 10 + num);
-            }
+            if (isDecimal !== 1)
+              numberStack.push(
+                (numberStack.pop() * isDecimal + num) / isDecimal
+              );
+            else numberStack.push(numberStack.pop() * 10 + num);
           }
           numIsNegative = 1;
-          isDecimal = false;
+          if (isDecimal !== 1) isDecimal *= 10;
         }
       }
     }
 
-    if (operatorStack.length === 0 && numberStack.length === 0)
-      return this.result;
-    else {
+    if (operatorStack.length !== 0) {
       while (operatorStack.length > 0) {
-        if (operatorStack.length > 1) {
-          numberStack.push(
-            this.evaluateMidOperation(
-              operatorStack.pop(),
-              parseFloat(numberStack.pop()),
-              parseFloat(numberStack.pop())
-            )
-          );
-        } else {
-          this.evaluateLastOperation(operatorStack.pop(), numberStack.pop());
-        }
+        numberStack.push(
+          this.evaluateOperation(
+            operatorStack.pop(),
+            parseFloat(numberStack.pop()),
+            parseFloat(numberStack.pop())
+          )
+        );
       }
-      return this.result;
     }
+    return numberStack.pop();
   }
-  evaluateLastOperation(operator, operand) {
+  evaluateOperation(operator, operand1, operand2) {
+    this.result = operand2;
     switch (operator) {
       case "+":
-        this.add(operand);
+        this.add(operand1);
         break;
       case "-":
-        this.subtract(operand);
+        this.subtract(operand1);
         break;
       case "*":
-        this.multiply(operand);
+        this.multiply(operand1);
         break;
       case "/":
-        this.divide(operand);
+        this.divide(operand1);
         break;
     }
-  }
-  evaluateMidOperation(operator, operand1, operand2) {
-    switch (operator) {
-      case "+":
-        return operand1 + operand2;
-      case "-":
-        return (operand1 - operand2) * -1;
-      case "*":
-        return operand1 * operand2;
-      case "/":
-        return 1 / (operand1 / operand2);
-    }
+    return this.result;
   }
   validParanthesis(expression) {
     let brackets = [];
